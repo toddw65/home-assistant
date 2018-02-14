@@ -318,6 +318,7 @@ class RfxtrxDevice(Entity):
         self.signal_repetitions = signal_repetitions
         self._name = name
         self._event = event
+        self._unique_id = slugify(event.device.id_string.lower())
         self._state = datas[ATTR_STATE]
         self._should_fire_event = datas[ATTR_FIRE_EVENT]
         self._brightness = 0
@@ -332,6 +333,11 @@ class RfxtrxDevice(Entity):
     def should_poll(self):
         """No polling needed for a RFXtrx switch."""
         return False
+
+    @property
+    def unique_id(self) -> str:
+        """Return an unique ID."""
+        return self._unique_id
 
     @property
     def name(self):
