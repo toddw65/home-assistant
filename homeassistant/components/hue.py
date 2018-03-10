@@ -15,7 +15,6 @@ import async_timeout
 import requests
 import voluptuous as vol
 
-from homeassistant.components.discovery import SERVICE_HUE
 from homeassistant.const import CONF_FILENAME, CONF_HOST
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers import discovery, aiohttp_client
@@ -82,23 +81,23 @@ def setup(hass, config):
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-    discovery.listen(
-        hass,
-        SERVICE_HUE,
-        lambda service, discovery_info:
-        bridge_discovered(hass, service, discovery_info))
-
     # User has configured bridges
     if CONF_BRIDGES in conf:
         bridges = conf[CONF_BRIDGES]
     # Component is part of config but no bridges specified, discover.
     elif DOMAIN in config:
+        # Filter out configured hosts. They will be set up via config entries
+        # after setup is done.
+        configured_hosts = set(
+            entry.data['bridge_id'] for entry
+            in hass.config_entries.async_entries(DOMAIN))
+
         # discover from nupnp
         hosts = requests.get(API_NUPNP).json()
         bridges = [{
             CONF_HOST: entry['internalipaddress'],
             CONF_FILENAME: '.hue_{}.conf'.format(entry['id']),
-        } for entry in hosts]
+        } for entry in hosts if entry['id'] not in configured_hosts]
     else:
         # Component not specified in config, we're loaded via discovery
         bridges = []
@@ -122,18 +121,6 @@ def setup(hass, config):
                      allow_in_emulated_hue, allow_hue_groups)
 
     return True
-
-
-def bridge_discovered(hass, service, discovery_info):
-    """Dispatcher for Hue discovery events."""
-    if "HASS Bridge" in discovery_info.get('name', ''):
-        return
-
-    host = discovery_info.get('host')
-    serial = discovery_info.get('serial')
-
-    filename = 'phue-{}.conf'.format(serial)
-    setup_bridge(host, hass, filename)
 
 
 def setup_bridge(host, hass, filename=None, allow_unreachable=False,
@@ -372,6 +359,27 @@ class HueFlowHandler(config_entries.ConfigFlowHandler):
             description=CONFIG_INSTRUCTIONS,
             errors=errors,
         )
+
+    async def async_step_discovery(self, discovery_info):
+        """Handle a discovered Hue bridge."""
+        # Filter out emulated Hue
+        if "HASS Bridge" in discovery_info.get('name', ''):
+            return self.async_abort(
+                reason='Discovered bridge is Home Assistant emulated Hue.'
+            )
+
+        host = discovery_info.get('host')
+        serial = discovery_info.get('serial')
+
+        if serial in (entry.data['bridge_id'] for entry
+                      in self.hass.config_entries.async_entries(DOMAIN)):
+            # Ignore bridge that is already set up.
+            return self.async_abort(
+                reason='Discovered bridge is already configured.'
+            )
+
+        self.host = host
+        return await self.async_step_link()
 
 
 async def async_setup_entry(hass, entry):

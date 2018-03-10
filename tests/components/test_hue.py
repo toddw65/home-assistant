@@ -128,73 +128,6 @@ class TestSetup(unittest.TestCase):
                 self.assertTrue(hue.DOMAIN in self.hass.data)
                 self.assertEqual(2, len(self.hass.data[hue.DOMAIN]))
 
-    @MockDependency('phue')
-    def test_bridge_discovered(self, mock_phue):
-        """Bridge discovery."""
-        mock_bridge = mock_phue.Bridge
-        mock_service = MagicMock()
-        discovery_info = {'host': '192.168.0.10', 'serial': 'foobar'}
-
-        with patch('homeassistant.helpers.discovery.load_platform') \
-                as mock_load:
-            self.assertTrue(setup_component(
-                self.hass, hue.DOMAIN, {}))
-            hue.bridge_discovered(self.hass, mock_service, discovery_info)
-
-            mock_bridge.assert_called_once_with(
-                '192.168.0.10',
-                config_file_path=get_test_config_dir('phue-foobar.conf'))
-            mock_load.assert_called_once_with(
-                self.hass, 'light', hue.DOMAIN,
-                {'bridge_id': '192.168.0.10'})
-
-            self.assertTrue(hue.DOMAIN in self.hass.data)
-            self.assertEqual(1, len(self.hass.data[hue.DOMAIN]))
-
-    @MockDependency('phue')
-    def test_bridge_configure_and_discovered(self, mock_phue):
-        """Bridge is in the config file, then we discover it."""
-        mock_bridge = mock_phue.Bridge
-        mock_service = MagicMock()
-        discovery_info = {'host': '192.168.1.10', 'serial': 'foobar'}
-
-        with assert_setup_component(1):
-            with patch('homeassistant.helpers.discovery.load_platform') \
-                    as mock_load:
-                # First we set up the component from config
-                self.assertTrue(setup_component(
-                    self.hass, hue.DOMAIN,
-                    {hue.DOMAIN: {hue.CONF_BRIDGES: [
-                        {CONF_HOST: '192.168.1.10'}]}}))
-
-                mock_bridge.assert_called_once_with(
-                    '192.168.1.10',
-                    config_file_path=get_test_config_dir(
-                        hue.PHUE_CONFIG_FILE))
-                calls_to_mock_load = [
-                    call(
-                        self.hass, 'light', hue.DOMAIN,
-                        {'bridge_id': '192.168.1.10'}),
-                ]
-                mock_load.assert_has_calls(calls_to_mock_load)
-
-                self.assertTrue(hue.DOMAIN in self.hass.data)
-                self.assertEqual(1, len(self.hass.data[hue.DOMAIN]))
-
-                # Then we discover the same bridge
-                hue.bridge_discovered(self.hass, mock_service, discovery_info)
-
-                # No additional calls
-                mock_bridge.assert_called_once_with(
-                    '192.168.1.10',
-                    config_file_path=get_test_config_dir(
-                        hue.PHUE_CONFIG_FILE))
-                mock_load.assert_has_calls(calls_to_mock_load)
-
-                # Still only one
-                self.assertTrue(hue.DOMAIN in self.hass.data)
-                self.assertEqual(1, len(self.hass.data[hue.DOMAIN]))
-
 
 class TestHueBridge(unittest.TestCase):
     """Test the HueBridge class."""
@@ -586,3 +519,48 @@ async def test_flow_link_unknown_host(hass):
     assert result['errors'] == {
         'base': 'Failed to register, please try again.'
     }
+
+
+async def test_bridge_discovery(hass):
+    """Test a bridge being discovered."""
+    flow = hue.HueFlowHandler()
+    flow.hass = hass
+
+    result = await flow.async_step_discovery({
+        'host': '0.0.0.0',
+        'serial': '1234'
+    })
+
+    assert result['type'] == 'form'
+    assert result['step_id'] == 'link'
+
+
+async def test_bridge_discovery_emulated_hue(hass):
+    """Test if discovery info is from an emulated hue instance."""
+    flow = hue.HueFlowHandler()
+    flow.hass = hass
+
+    result = await flow.async_step_discovery({
+        'name': 'HASS Bridge',
+        'host': '0.0.0.0',
+        'serial': '1234'
+    })
+
+    assert result['type'] == 'abort'
+
+
+async def test_bridge_discovery_already_configured(hass):
+    """Test if a discovered bridge has already been configured."""
+    MockConfigEntry(domain='hue', data={
+        'bridge_id': '1234'
+    }).add_to_hass(hass)
+
+    flow = hue.HueFlowHandler()
+    flow.hass = hass
+
+    result = await flow.async_step_discovery({
+        'host': '0.0.0.0',
+        'serial': '1234'
+    })
+
+    assert result['type'] == 'abort'
