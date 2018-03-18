@@ -1,0 +1,35 @@
+#!/bin/bash
+# Sets up chrome & chromedriver.
+
+# Stop on errors
+set -e
+
+PACKAGES=(
+    xvfb libxi6 libgconf-2-4 unzip curl
+)
+
+# Required debian packages for running hass or components from jessie-backports
+PACKAGES_BACKPORTS=(
+  openjdk-8-jre-headless java-common ca-certificates-java
+)
+
+apt-get install -y --no-install-recommends -t jessie-backports ${PACKAGES_BACKPORTS[@]}
+apt-get install -y --no-install-recommends ${PACKAGES[@]}
+
+# Versions
+CHROME_DRIVER_VERSION=$(curl chromedriver.storage.googleapis.com/LATEST_RELEASE)
+
+
+# Install Chrome.
+curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list
+apt-get -y update
+apt-get -y install google-chrome-stable
+
+# Install ChromeDriver.
+wget -N http://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip -P ~/
+unzip ~/chromedriver_linux64.zip -d ~/
+rm ~/chromedriver_linux64.zip
+mv -f ~/chromedriver /usr/local/bin/chromedriver
+chown root:root /usr/local/bin/chromedriver
+chmod 0755 /usr/local/bin/chromedriver

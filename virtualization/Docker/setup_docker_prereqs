@@ -4,12 +4,14 @@
 # Stop on errors
 set -e
 
+INSTALL_CHROME="${INSTALL_CHROME:-yes}"
 INSTALL_TELLSTICK="${INSTALL_TELLSTICK:-yes}"
 INSTALL_OPENALPR="${INSTALL_OPENALPR:-yes}"
 INSTALL_FFMPEG="${INSTALL_FFMPEG:-yes}"
 INSTALL_LIBCEC="${INSTALL_LIBCEC:-yes}"
 INSTALL_PHANTOMJS="${INSTALL_PHANTOMJS:-yes}"
 INSTALL_SSOCR="${INSTALL_SSOCR:-yes}"
+
 
 # Required debian packages for running hass or components
 PACKAGES=(
@@ -60,6 +62,10 @@ fi
 
 if [ "$INSTALL_SSOCR" == "yes" ]; then
   virtualization/Docker/scripts/ssocr
+fi
+
+if [ "$INSTALL_CHROME" == "yes" ]; then
+  virtualization/Docker/scripts/chrome
 fi
 
 # Remove packages
